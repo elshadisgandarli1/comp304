@@ -1,4 +1,5 @@
 #include <errno.h>
+#include <sys/stat.h>
 #include <stdbool.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -336,12 +337,67 @@ int process_command(struct command_t *command) {
 
     // TODO: do your own exec with path resolving using execv()
     // do so by replacing the execvp call below
-    execvp(command->name, command->args); // exec+args+path
+    if (command->redirects[0] != NULL) {
+        int file = open(command->redirects[0], O_RDONLY);
+        if (file < 0) {
+            perror("Error");
+            exit(1);
+        }
+        dup2(file, 0); 
+        close(file);
+    }
+
+    if (command->redirects[1] != NULL) {
+        int file = open(command->redirects[1], O_WRONLY | O_CREAT | O_TRUNC, 0644);
+        if (file < 0) {
+            perror("Error");
+            exit(1);
+        }
+        dup2(file, 1);
+        close(file);
+    }
+
+    if (command->redirects[2] != NULL) {
+        int file = open(command->redirects[2], O_WRONLY | O_CREAT | O_APPEND, 0644);
+        if (file < 0) {
+            perror("Error");
+            exit(1);
+        }
+        dup2(file, 1);
+        close(file);
+    }
+
+
+
+    char *path_env = getenv("PATH");
+    char *token = strtok(path_env, ":");
+    struct stat buffer;
+
+    while (token != NULL) {
+      char full_path[1024];
+
+      strcpy(full_path, token);
+      strcat(full_path, "/");
+      strcat(full_path, command->name);
+
+      if (stat(full_path, &buffer) == 0) {
+           execv(full_path, command->args);
+      }
+
+      token = strtok(NULL, ":");
+    }
+
+//    execvp(command->name, command->args); // exec+args+path
     printf("-%s: %s: command not found\n", sysname, command->name);
     exit(127);
   } else {
     // TODO: implement background processes here
-    wait(0); // wait for child process to finish
+  if (command->background) {
+      printf("Process %d running in background\n", pid);
+    } else {
+
+      waitpid(pid, NULL, 0);
+    }
     return SUCCESS;
   }
 }
