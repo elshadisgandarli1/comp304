@@ -348,26 +348,26 @@ int process_command(struct command_t *command) {
                 dup2(pipe_file[1], 1);
                 close(pipe_file[0]);
                 close(pipe_file[1]);
-            } else {
-                if (current->redirects[0]) {
+            } 
+            if (current->redirects[0]) {
                     int file = open(current->redirects[0], O_RDONLY);
                     if (file < 0) { perror("Error"); exit(1); }
                     dup2(file, 0); 
                     close(file);
                 }
-                if (current->redirects[1]) {
-                    int file = open(current->redirects[1], O_WRONLY | O_CREAT | O_TRUNC, 0644);
-                    if (file < 0) { perror("Error"); exit(1); }
-                    dup2(file, 1); 
-                    close(file);
-                }
-                if (current->redirects[2]) {
-                    int file = open(current->redirects[2], O_WRONLY | O_CREAT | O_APPEND, 0644);
-                    if (file < 0) { perror("Error"); exit(1); }
-                    dup2(file, 1); 
-                    close(file);
-                }
+            if (current->redirects[1]) {
+                int file = open(current->redirects[1], O_WRONLY | O_CREAT | O_TRUNC, 0644);
+                if (file < 0) { perror("Error"); exit(1); }
+                dup2(file, 1); 
+                close(file);
             }
+            if (current->redirects[2]) {
+                int file = open(current->redirects[2], O_WRONLY | O_CREAT | O_APPEND, 0644);
+                if (file < 0) { perror("Error"); exit(1); }
+                dup2(file, 1); 
+                close(file);
+            }
+            
 
             char *path_env = getenv("PATH");
             char *token = strtok(path_env, ":");
