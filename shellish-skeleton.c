@@ -324,82 +324,88 @@ int process_command(struct command_t *command) {
     }
   }
 
-  pid_t pid = fork();
-  if (pid == 0) // child
-  {
-    /// This shows how to do exec with environ (but is not available on MacOs)
-    // extern char** environ; // environment variables
-    // execvpe(command->name, command->args, environ); // exec+args+path+environ
+  int pipe_in = 0; 
+    struct command_t *current = command;
 
-    /// This shows how to do exec with auto-path resolve
-    // add a NULL argument to the end of args, and the name to the beginning
-    // as required by exec
-
-    // TODO: do your own exec with path resolving using execv()
-    // do so by replacing the execvp call below
-    if (command->redirects[0] != NULL) {
-        int file = open(command->redirects[0], O_RDONLY);
-        if (file < 0) {
-            perror("Error");
-            exit(1);
+    while (current != NULL) {
+        int pipe_file[2];
+        if (current->next != NULL) {
+            if (pipe(pipe_file) == -1) {
+                perror("Error");
+                return SUCCESS;
+            }
         }
-        dup2(file, 0); 
-        close(file);
-    }
 
-    if (command->redirects[1] != NULL) {
-        int file = open(command->redirects[1], O_WRONLY | O_CREAT | O_TRUNC, 0644);
-        if (file < 0) {
-            perror("Error");
-            exit(1);
+        pid_t pid = fork();
+
+        if (pid == 0) {
+            if (pipe_in != 0) {
+                dup2(pipe_in, 0);
+                close(pipe_in);
+            }
+
+            if (current->next != NULL) {
+                dup2(pipe_file[1], 1);
+                close(pipe_file[0]);
+                close(pipe_file[1]);
+            } else {
+                if (current->redirects[0]) {
+                    int file = open(current->redirects[0], O_RDONLY);
+                    if (file < 0) { perror("Error"); exit(1); }
+                    dup2(file, 0); 
+                    close(file);
+                }
+                if (current->redirects[1]) {
+                    int file = open(current->redirects[1], O_WRONLY | O_CREAT | O_TRUNC, 0644);
+                    if (file < 0) { perror("Error"); exit(1); }
+                    dup2(file, 1); 
+                    close(file);
+                }
+                if (current->redirects[2]) {
+                    int file = open(current->redirects[2], O_WRONLY | O_CREAT | O_APPEND, 0644);
+                    if (file < 0) { perror("Error"); exit(1); }
+                    dup2(file, 1); 
+                    close(file);
+                }
+            }
+
+            char *path_env = getenv("PATH");
+            char *token = strtok(path_env, ":");
+            struct stat buffer;
+
+            while (token != NULL) {
+                char full_path[1024];
+                strcpy(full_path, token);
+                strcat(full_path, "/");
+                strcat(full_path, current->name);
+
+                if (stat(full_path, &buffer) == 0) {
+                    execv(full_path, current->args);
+                }
+                token = strtok(NULL, ":");
+            }
+            printf("-%s: %s: command not found\n", sysname, current->name);
+            exit(127);
+
+        } else {
+            if (pipe_in != 0) close(pipe_in);
+            
+            if (current->next != NULL) {
+                close(pipe_file[1]);
+                pipe_in = pipe_file[0];
+            }
+
+            if (current->next == NULL) {
+                if (command->background) {
+                    printf("[Process %d running in background]\n", pid);
+                } else {
+                    waitpid(pid, NULL, 0);
+                }
+            }
         }
-        dup2(file, 1);
-        close(file);
-    }
-
-    if (command->redirects[2] != NULL) {
-        int file = open(command->redirects[2], O_WRONLY | O_CREAT | O_APPEND, 0644);
-        if (file < 0) {
-            perror("Error");
-            exit(1);
-        }
-        dup2(file, 1);
-        close(file);
-    }
-
-
-
-    char *path_env = getenv("PATH");
-    char *token = strtok(path_env, ":");
-    struct stat buffer;
-
-    while (token != NULL) {
-      char full_path[1024];
-
-      strcpy(full_path, token);
-      strcat(full_path, "/");
-      strcat(full_path, command->name);
-
-      if (stat(full_path, &buffer) == 0) {
-           execv(full_path, command->args);
-      }
-
-      token = strtok(NULL, ":");
-    }
-
-//    execvp(command->name, command->args); // exec+args+path
-    printf("-%s: %s: command not found\n", sysname, command->name);
-    exit(127);
-  } else {
-    // TODO: implement background processes here
-  if (command->background) {
-      printf("Process %d running in background\n", pid);
-    } else {
-
-      waitpid(pid, NULL, 0);
+        current = current->next;
     }
     return SUCCESS;
-  }
 }
 
 int main() {
