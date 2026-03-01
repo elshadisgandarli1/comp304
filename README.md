@@ -1,3 +1,12 @@
+# Shell-ish OS Project
+**GitHub Repository:** https://github.com/elshadisgandarli1/comp304
+
+## How to Compile and Run the Shell
+1. Compile the main shell: `gcc main.c -o shell`
+2. Run the executable: `./shell`
+3. You can execute standard UNIX commands, pipe commands together, and use background processes.
+
+
 # Custom Command: `tree`
 
 The `tree` command is a visual tool that maps out your folders. Normally, if you type `ls`, you only see a flat list of the files right in front of you. 
